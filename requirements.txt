@@ -1,0 +1,6 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+anthropic>=0.40
+mido>=1.3
+python-rtmidi>=1.5
+pydantic>=2.6

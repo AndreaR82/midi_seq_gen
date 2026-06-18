@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MIDI Sequence Generator</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.4rem; }
+    label { display: block; margin: 0.6rem 0 0.2rem; font-weight: 600; font-size: 0.9rem; }
+    input, select, textarea, button { font: inherit; padding: 0.4rem; }
+    .row { display: flex; gap: 1rem; }
+    .row > div { flex: 1; }
+    input, select, textarea { width: 100%; box-sizing: border-box; }
+    textarea { min-height: 4rem; }
+    .buttons { margin-top: 1rem; display: flex; gap: 0.5rem; }
+    button { cursor: pointer; padding: 0.5rem 1rem; }
+    #status { margin-top: 1rem; font-size: 0.9rem; }
+    #summary { margin-top: 1rem; padding: 0.75rem; background: #f4f4f4; border-radius: 6px; }
+    pre { white-space: pre-wrap; word-break: break-word; font-size: 0.8rem; }
+    .err { color: #b00020; }
+  </style>
+</head>
+<body>
+  <h1>MIDI Sequence Generator</h1>
+
+  <label for="query">Prompt</label>
+  <textarea id="query" placeholder="write a drum sequence for a techno song">write a drum sequence for a techno song</textarea>
+
+  <div class="row">
+    <div>
+      <label for="bpm">BPM</label>
+      <input id="bpm" type="number" value="130" min="20" max="300" />
+    </div>
+    <div>
+      <label for="key">Key</label>
+      <input id="key" type="text" value="C minor" />
+    </div>
+    <div>
+      <label for="channel">MIDI channel</label>
+      <select id="channel"></select>
+    </div>
+  </div>
+
+  <label for="port">MIDI output port</label>
+  <div class="row">
+    <div><select id="port"></select></div>
+    <div style="flex:0"><button id="refresh">↻</button></div>
+  </div>
+
+  <div class="buttons">
+    <button id="generate">Generate</button>
+    <button id="play">Play</button>
+    <button id="stop">Stop</button>
+  </div>
+
+  <div id="status"></div>
+  <div id="summary" hidden></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
