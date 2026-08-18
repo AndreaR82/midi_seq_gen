@@ -2,3 +2,12 @@
 __pycache__/
 *.pyc
 .env
+
+# melody_model artifacts — datasets and checkpoints are local/regeneratable,
+# not committed. Anchored to repo root so this doesn't shadow the
+# melody_model/data/ *source* package.
+/data/
+/checkpoints/
+/generated/
+.pytest_cache/
+

@@ -1,0 +1,6 @@
+# Extra dependencies for melody_model/ (training a small melody generator
+# from scratch). Kept separate from requirements.txt so the live app/
+# doesn't need to pull in torch just to run.
+torch>=2.2
+numpy>=1.26
+mido>=1.3
