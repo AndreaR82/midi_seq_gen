@@ -87,3 +87,40 @@ def test_corpus_of_handles_nesting_and_odd_layouts():
     assert corpus_of("data/raw/pop909/211.mid") == "pop909"
     assert corpus_of("data/raw/lakh/a/b/c.mid") == "lakh"
     assert corpus_of("somewhere/else/tune.mid") == "else"
+
+
+def test_token_budget_caps_batch_memory():
+    """A fixed batch size OOMs on long fragments and wastes memory on short
+    ones, because attention costs B x H x T x T. Batching to a token budget
+    makes B fall out of T instead."""
+    from melody_model.train import LengthBucketBatchSampler
+
+    lengths = [20] * 500 + [259] * 500
+    sampler = LengthBucketBatchSampler(lengths, batch_size=128, max_tokens=8192)
+
+    for batch in sampler:
+        width = max(lengths[i] for i in batch)
+        assert len(batch) * width <= 8192 or len(batch) == 1
+        assert len(batch) <= 128
+    # Every fragment is used exactly once per epoch.
+    assert sorted(i for b in sampler for i in b) == list(range(1000))
+
+
+def test_token_budget_gives_long_fragments_smaller_batches():
+    from melody_model.train import LengthBucketBatchSampler
+
+    lengths = [20] * 500 + [250] * 500
+    sampler = LengthBucketBatchSampler(lengths, batch_size=128, max_tokens=8192)
+    short = [len(b) for b in sampler if max(lengths[i] for i in b) == 20]
+    long_ = [len(b) for b in sampler if max(lengths[i] for i in b) == 250]
+    assert min(short) > max(long_)
+
+
+def test_sampler_length_matches_what_it_yields():
+    from melody_model.train import LengthBucketBatchSampler
+
+    sampler = LengthBucketBatchSampler([37] * 1000, batch_size=128, max_tokens=8192)
+    assert len(sampler) == len(list(sampler))
+    # set_epoch reshuffles but still covers everything exactly once.
+    sampler.set_epoch(1)
+    assert sorted(i for b in sampler for i in b) == list(range(1000))

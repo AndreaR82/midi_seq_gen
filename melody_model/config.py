@@ -74,6 +74,10 @@ class TrainConfig:
     lr_min_ratio: float = 0.1  # cosine floor, as a fraction of `lr`
     patience: int = 3  # epochs without val improvement before stopping early
     bucket_batches: bool = True  # batch similar lengths together to cut padding
+    # Padded tokens per batch. Batch size falls out of this (capped by
+    # batch_size), keeping peak memory flat instead of letting a long batch
+    # blow the GPU budget -- attention needs B x H x T x T per layer.
+    max_tokens: int = 8192
 
     def to_dict(self) -> dict:
         return asdict(self)

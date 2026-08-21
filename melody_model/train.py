@@ -42,42 +42,75 @@ class FragmentDataset(Dataset):
 
 
 class LengthBucketBatchSampler(torch.utils.data.Sampler):
-    """Batch fragments of similar length together.
+    """Batch fragments of similar length together, under a token budget.
 
-    Lengths run from ~20 to 259 tokens with a median around 37, so a randomly
-    drawn batch pads to roughly its longest member and wastes about 3x the
-    compute on PAD. Shuffling within a large chunk, sorting that chunk by
-    length, then shuffling the resulting batches keeps the randomness that
-    matters (which fragments meet, and in what order batches arrive) while
-    dropping most of the padding.
+    Two things this fixes. Lengths run from ~20 to 259 tokens with a median
+    around 37, so a randomly drawn batch pads to roughly its longest member and
+    wastes about 3x the compute on PAD -- sorting by length before batching
+    removes most of that, and measured ~15x faster on MPS (attention is
+    quadratic in the padded length, so the win is larger than the token count
+    suggests).
+
+    And a *fixed* batch size is the wrong unit: attention materializes
+    B x H x T x T per layer, so at B=128 a T=259 batch needs 206 MB per layer
+    for the scores alone and OOMs a 9 GB MPS budget, while a T=37 batch of the
+    same B barely registers. Batching to a token budget instead makes B fall
+    out of T -- long sequences get small batches, short ones get large -- which
+    keeps peak memory flat across the whole length distribution.
     """
 
-    def __init__(self, lengths: list[int], batch_size: int, chunk_batches: int = 50, seed: int = 0) -> None:
+    def __init__(
+        self,
+        lengths: list[int],
+        batch_size: int,
+        max_tokens: int | None = None,
+        chunk_batches: int = 50,
+        seed: int = 0,
+    ) -> None:
         self.lengths = lengths
-        self.batch_size = batch_size
-        self.chunk_size = batch_size * chunk_batches
-        self.epoch = 0
+        self.batch_size = batch_size  # hard cap, so short fragments don't make huge batches
+        self.max_tokens = max_tokens
+        self.chunk_size = max(batch_size * chunk_batches, 1)
         self.seed = seed
+        self._batches: list[list[int]] = []
+        self.set_epoch(0)
 
     def set_epoch(self, epoch: int) -> None:
         self.epoch = epoch
+        self._batches = self._build(epoch)
 
-    def __iter__(self):
-        rng = random.Random(self.seed + self.epoch)
+    def _build(self, epoch: int) -> list[list[int]]:
+        rng = random.Random(self.seed + epoch)
         indices = list(range(len(self.lengths)))
         rng.shuffle(indices)
 
-        batches = []
+        batches: list[list[int]] = []
         for start in range(0, len(indices), self.chunk_size):
             chunk = sorted(indices[start : start + self.chunk_size], key=lambda i: self.lengths[i])
-            for bstart in range(0, len(chunk), self.batch_size):
-                batches.append(chunk[bstart : bstart + self.batch_size])
+            batch: list[int] = []
+            longest = 0
+            for idx in chunk:
+                length = self.lengths[idx]
+                width = max(longest, length)
+                # Padded cost of adding this one: every row grows to `width`.
+                over_budget = self.max_tokens is not None and batch and (len(batch) + 1) * width > self.max_tokens
+                if over_budget or len(batch) == self.batch_size:
+                    batches.append(batch)
+                    batch, longest = [], 0
+                    width = length
+                batch.append(idx)
+                longest = width
+            if batch:
+                batches.append(batch)
 
         rng.shuffle(batches)
-        return iter(batches)
+        return batches
+
+    def __iter__(self):
+        return iter(self._batches)
 
     def __len__(self) -> int:
-        return math.ceil(len(self.lengths) / self.batch_size)
+        return len(self._batches)
 
 
 def make_collate_fn(pad_id: int):
@@ -220,7 +253,8 @@ def train(dataset_path: Path, out_dir: Path, model_cfg: ModelConfig, train_cfg: 
     train_dataset = FragmentDataset(train_records)
     if train_cfg.bucket_batches:
         sampler = LengthBucketBatchSampler(
-            [len(r["tokens"]) for r in train_records], train_cfg.batch_size, seed=train_cfg.seed
+            [len(r["tokens"]) for r in train_records], train_cfg.batch_size,
+            max_tokens=train_cfg.max_tokens, seed=train_cfg.seed,
         )
         train_loader = DataLoader(train_dataset, batch_sampler=sampler, collate_fn=collate)
     else:
@@ -228,9 +262,14 @@ def train(dataset_path: Path, out_dir: Path, model_cfg: ModelConfig, train_cfg: 
         train_loader = DataLoader(
             train_dataset, batch_size=train_cfg.batch_size, shuffle=True, collate_fn=collate
         )
-    val_loader = DataLoader(
-        FragmentDataset(val_records), batch_size=train_cfg.batch_size, shuffle=False, collate_fn=collate
+    # Validation gets the same treatment. It runs under no_grad so it saves no
+    # activations, but attention still materializes B x H x T x T -- enough for
+    # a full-width batch of the longest fragments to OOM on its own.
+    val_sampler = LengthBucketBatchSampler(
+        [len(r["tokens"]) for r in val_records], train_cfg.batch_size,
+        max_tokens=train_cfg.max_tokens, seed=train_cfg.seed,
     )
+    val_loader = DataLoader(FragmentDataset(val_records), batch_sampler=val_sampler, collate_fn=collate)
 
     device = pick_device()
     model = MelodyTransformer(model_cfg, pad_id=tokenizer.pad_id).to(device)
@@ -251,7 +290,10 @@ def train(dataset_path: Path, out_dir: Path, model_cfg: ModelConfig, train_cfg: 
 
     steps_per_epoch = len(train_loader)
     total_steps = steps_per_epoch * train_cfg.epochs
-    print(f"{steps_per_epoch:,} steps/epoch, {total_steps:,} total, warmup {train_cfg.warmup_steps}")
+    print(
+        f"{steps_per_epoch:,} steps/epoch, {total_steps:,} total, warmup {train_cfg.warmup_steps} | "
+        f"batching: <={train_cfg.max_tokens} padded tokens, <={train_cfg.batch_size} rows"
+    )
 
     base_provenance = {
         "dataset_path": str(dataset_path),
@@ -363,13 +405,15 @@ def main() -> None:
     parser.add_argument("--patience", type=int, default=TrainConfig.patience)
     parser.add_argument("--val-fraction", type=float, default=TrainConfig.val_fraction)
     parser.add_argument("--no-bucket", action="store_true", help="disable length-bucketed batching")
+    parser.add_argument("--max-tokens", type=int, default=TrainConfig.max_tokens,
+                        help="padded tokens per batch; lower this if the GPU runs out of memory")
     args = parser.parse_args()
 
     model_cfg = ModelConfig(d_model=args.d_model, n_layer=args.n_layer, n_head=args.n_head, d_ff=args.d_ff, dropout=args.dropout)
     train_cfg = TrainConfig(
         batch_size=args.batch_size, lr=args.lr, epochs=args.epochs, seed=args.seed,
         warmup_steps=args.warmup_steps, patience=args.patience, val_fraction=args.val_fraction,
-        bucket_batches=not args.no_bucket,
+        bucket_batches=not args.no_bucket, max_tokens=args.max_tokens,
     )
     train(args.dataset, args.out_dir, model_cfg, train_cfg)
 
