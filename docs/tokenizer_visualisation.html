@@ -1,0 +1,984 @@
+<meta charset="utf-8">
+<title>Notes Into Tokens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+
+<style>
+  :root {
+    --bg:      #eef0f2;
+    --panel:   #ffffff;
+    --sunk:    #e6e9ec;
+    --ink:     #161b21;
+    --muted:   #5c6874;
+    --rule:    #d3d9de;
+    --rule-hi: #b3bdc6;
+
+    --ctrl:      #6b4fc7;
+    --ctrl-soft: #e6e0f8;
+    --pitch:      #b06305;
+    --pitch-soft: #fbe6cd;
+    --dur:      #0f7d76;
+    --dur-soft: #d4ece9;
+    --rest:      #6b7785;
+    --rest-soft: #dfe4e9;
+
+    --focus: #0f7d76;
+    --shadow: 0 1px 2px rgba(22,27,33,.06), 0 8px 24px rgba(22,27,33,.06);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:      #0e1317;
+      --panel:   #161c22;
+      --sunk:    #11171c;
+      --ink:     #e6ebef;
+      --muted:   #93a0ad;
+      --rule:    #262f37;
+      --rule-hi: #3a454f;
+
+      --ctrl:      #ad93f2;
+      --ctrl-soft: #2a2440;
+      --pitch:      #f0a94a;
+      --pitch-soft: #3a2c17;
+      --dur:      #55cdc0;
+      --dur-soft: #10332f;
+      --rest:      #97a4b2;
+      --rest-soft: #1f272e;
+
+      --focus: #55cdc0;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg:      #0e1317;
+    --panel:   #161c22;
+    --sunk:    #11171c;
+    --ink:     #e6ebef;
+    --muted:   #93a0ad;
+    --rule:    #262f37;
+    --rule-hi: #3a454f;
+
+    --ctrl:      #ad93f2;
+    --ctrl-soft: #2a2440;
+    --pitch:      #f0a94a;
+    --pitch-soft: #3a2c17;
+    --dur:      #55cdc0;
+    --dur-soft: #10332f;
+    --rest:      #97a4b2;
+    --rest-soft: #1f272e;
+
+    --focus: #55cdc0;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    display: grid;
+    grid-template-columns:
+      [full-start] minmax(1.25rem, 1fr)
+      [wide-start] minmax(0, 150px)
+      [text-start] minmax(0, 65ch)
+      [text-end] minmax(0, 150px)
+      [wide-end] minmax(1.25rem, 1fr)
+      [full-end];
+    row-gap: 1.15rem;
+    padding: 0 0 5rem;
+  }
+  .page > * { grid-column: text; }
+  .page > .wide { grid-column: wide; }
+
+  /* ---- type ---- */
+  h1, h2, h3, .eyebrow, .ui { font-family: Archivo, "Helvetica Neue", Arial, sans-serif; }
+
+  h1 {
+    font-size: clamp(2.6rem, 7vw, 4.1rem);
+    line-height: .96;
+    font-weight: 700;
+    letter-spacing: -.028em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h2 {
+    font-size: 1.32rem;
+    font-weight: 600;
+    letter-spacing: -.012em;
+    margin: 2.6rem 0 0;
+    text-wrap: balance;
+  }
+  h3 {
+    font-size: .95rem;
+    font-weight: 600;
+    letter-spacing: -.005em;
+    margin: 0;
+  }
+  p { margin: 0; }
+  p + p { margin-top: .7rem; }
+
+  .eyebrow {
+    font-size: .69rem;
+    font-weight: 600;
+    letter-spacing: .17em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .standfirst {
+    font-size: 1.16rem;
+    color: var(--muted);
+    max-width: 54ch;
+  }
+  .lede { color: var(--muted); }
+  em { font-style: italic; }
+  strong { font-weight: 600; }
+
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; }
+  p code, li code, td code {
+    font-size: .86em;
+    background: var(--sunk);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: .05em .32em;
+  }
+
+  a { color: var(--ink); text-decoration-color: var(--rule-hi); text-underline-offset: 3px; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
+
+  /* ---- masthead ---- */
+  header.masthead {
+    padding: 4.5rem 0 .5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+  }
+  .rule-line {
+    height: 1px;
+    background: var(--rule);
+    margin: 2.2rem 0 .4rem;
+  }
+
+  /* ---- grammar strip ---- */
+  .grammar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .3rem;
+    padding: 1rem 1.05rem;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+  }
+  .grammar .sep { color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: .8rem; }
+
+  /* ---- token chips ---- */
+  .tok {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .78rem;
+    font-weight: 500;
+    letter-spacing: -.01em;
+    padding: .24rem .48rem;
+    border-radius: 4px;
+    border: 1px solid;
+    white-space: nowrap;
+    line-height: 1.25;
+    display: inline-block;
+  }
+  .tok-ctrl  { color: var(--ctrl);  background: var(--ctrl-soft);  border-color: color-mix(in srgb, var(--ctrl) 35%, transparent); }
+  .tok-pitch { color: var(--pitch); background: var(--pitch-soft); border-color: color-mix(in srgb, var(--pitch) 35%, transparent); }
+  .tok-dur   { color: var(--dur);   background: var(--dur-soft);   border-color: color-mix(in srgb, var(--dur) 35%, transparent); }
+  .tok-rest  { color: var(--rest);  background: var(--rest-soft);  border-color: color-mix(in srgb, var(--rest) 40%, transparent); }
+
+  /* ---- panels ---- */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 1.15rem 1.25rem 1.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: .9rem;
+  }
+  .panel-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .panel-note {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .72rem;
+    color: var(--muted);
+    letter-spacing: -.01em;
+  }
+  .scroller { overflow-x: auto; padding-bottom: .3rem; }
+
+  /* ---- piano roll ---- */
+  .roll { --step: 22px; --lane: 15px; --gutter: 62px; width: max-content; min-width: 100%; }
+
+  .roll-row { display: grid; grid-template-columns: var(--gutter) repeat(32, var(--step)); align-items: center; }
+  .roll-lane { height: var(--lane); }
+
+  .gutter {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .63rem;
+    color: var(--muted);
+    text-align: right;
+    padding-right: .5rem;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .gutter.strong { color: var(--ink); }
+
+  .cell {
+    height: 100%;
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid transparent;
+    position: relative;
+  }
+  .cell.beat  { border-right-color: var(--rule-hi); }
+  .cell.bar   { border-right-color: var(--ink); }
+  .cell.first { border-left: 1px solid var(--ink); }
+  .roll-lane .cell { background: var(--sunk); }
+  .roll-lane.alt .cell { background: color-mix(in srgb, var(--sunk) 55%, var(--panel)); }
+
+  .ruler .cell {
+    background: none;
+    border-right: none;
+    height: 18px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .6rem;
+    color: var(--muted);
+    display: flex;
+    align-items: flex-end;
+    font-variant-numeric: tabular-nums;
+  }
+  .ruler .cell span { transform: translateX(-1px); }
+
+  .barline {
+    display: grid;
+    grid-template-columns: var(--gutter) repeat(2, calc(var(--step) * 16));
+    font-family: Archivo, sans-serif;
+    font-size: .64rem;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: .15rem;
+  }
+  .barline div + div { border-left: 1px solid var(--ink); padding-left: .4rem; }
+
+  /* note + rest blocks sit in an overlay so they can span steps */
+  .roll-body { position: relative; }
+  .blocks { position: absolute; inset: 0 0 0 var(--gutter); pointer-events: none; }
+  .blk {
+    position: absolute;
+    border-radius: 3px;
+    pointer-events: auto;
+    cursor: default;
+    transition: opacity .18s ease, transform .18s ease, box-shadow .18s ease;
+    display: flex;
+    align-items: center;
+    padding-left: .3rem;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .62rem;
+    overflow: hidden;
+  }
+  .blk.note { background: var(--pitch); color: var(--panel); border: 1px solid color-mix(in srgb, var(--pitch) 70%, #000); }
+  .blk.rest {
+    background: repeating-linear-gradient(-45deg, var(--rest-soft) 0 4px, transparent 4px 8px);
+    border: 1px dashed color-mix(in srgb, var(--rest) 55%, transparent);
+    color: var(--rest);
+  }
+  .blk[data-emitted="0"] { opacity: .16; }
+  .blk.lit { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--focus); z-index: 3; }
+
+  .cursor {
+    position: absolute;
+    top: -4px; bottom: -4px;
+    width: 2px;
+    background: var(--focus);
+    transition: left .22s cubic-bezier(.4,0,.2,1);
+    z-index: 4;
+  }
+  .cursor::after {
+    content: "";
+    position: absolute;
+    top: -3px; left: -3px;
+    width: 8px; height: 8px;
+    background: var(--focus);
+    border-radius: 50%;
+  }
+
+  /* ---- controls ---- */
+  .controls { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+  button.ui {
+    font-size: .74rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--ink);
+    background: var(--panel);
+    border: 1px solid var(--rule-hi);
+    border-radius: 5px;
+    padding: .42rem .8rem;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease;
+  }
+  button.ui:hover { background: var(--sunk); border-color: var(--ink); }
+  button.ui[disabled] { opacity: .4; cursor: default; }
+  .readout {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .72rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    margin-left: auto;
+  }
+
+  /* ---- token stream ---- */
+  .stream { display: flex; flex-wrap: wrap; gap: .28rem; align-items: center; min-height: 2rem; }
+  .pair { display: flex; gap: .14rem; padding: .16rem; border-radius: 6px; border: 1px solid transparent; transition: border-color .15s ease, background .15s ease; }
+  .pair.lit { border-color: var(--focus); background: color-mix(in srgb, var(--focus) 8%, transparent); }
+  .pair[data-emitted="0"] { opacity: .16; }
+  .pair .tok { cursor: default; }
+
+  /* ---- legend ---- */
+  .legend { display: flex; flex-wrap: wrap; gap: .35rem 1rem; font-family: Archivo, sans-serif; font-size: .72rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: .38rem; }
+  .swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+  /* ---- token class cards ---- */
+  .cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: .8rem; }
+  @media (min-width: 560px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 9px;
+    padding: .95rem 1rem 1.05rem;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    border-top: 3px solid var(--klass, var(--rule));
+  }
+  .card .count {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .7rem;
+    color: var(--klass, var(--muted));
+    font-weight: 600;
+    letter-spacing: .02em;
+  }
+  .card p { font-size: .88rem; line-height: 1.5; color: var(--muted); }
+  .card .examples { display: flex; flex-wrap: wrap; gap: .22rem; }
+
+  /* ---- vocab strip ---- */
+  .vocab { display: flex; flex-wrap: wrap; gap: 3px; }
+  .vcell {
+    width: 15px; height: 15px;
+    border-radius: 2px;
+    border: 1px solid transparent;
+    cursor: default;
+    transition: transform .12s ease;
+  }
+  .vcell:hover, .vcell:focus-visible { transform: scale(1.45); z-index: 2; }
+  .vcell.ctrl  { background: var(--ctrl-soft);  border-color: color-mix(in srgb, var(--ctrl) 45%, transparent); }
+  .vcell.rest  { background: var(--rest-soft);  border-color: color-mix(in srgb, var(--rest) 50%, transparent); }
+  .vcell.pitch { background: var(--pitch-soft); border-color: color-mix(in srgb, var(--pitch) 45%, transparent); }
+  .vcell.dur   { background: var(--dur-soft);   border-color: color-mix(in srgb, var(--dur) 45%, transparent); }
+  .vgroup { display: flex; flex-direction: column; gap: .4rem; }
+  .vgroup-label {
+    font-family: Archivo, sans-serif;
+    font-size: .65rem;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .vocab-readout {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .75rem;
+    color: var(--ink);
+    background: var(--sunk);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: .4rem .6rem;
+    min-height: 2rem;
+    display: flex;
+    align-items: center;
+  }
+
+  /* ---- rule blocks ---- */
+  .rules { display: flex; flex-direction: column; gap: .8rem; container-type: inline-size; }
+  .rule-card {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 9px;
+    padding: 1rem 1.1rem 1.1rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: .7rem;
+  }
+  @container (min-width: 700px) {
+    .rule-card { grid-template-columns: minmax(0, 30ch) minmax(0, 1fr); gap: 1.6rem; align-items: start; }
+  }
+  .rule-card p { font-size: .89rem; color: var(--muted); line-height: 1.52; }
+  .rule-card .demo { display: flex; flex-direction: column; gap: .45rem; }
+  .arrow { font-family: "IBM Plex Mono", monospace; font-size: .72rem; color: var(--muted); }
+
+  /* ---- footer ---- */
+  footer {
+    margin-top: 3rem;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--rule);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .73rem;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  ul.tight { margin: 0; padding-left: 1.1rem; }
+  ul.tight li { margin-bottom: .35rem; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">melody_model / tokenizer.py</div>
+    <h1>Notes Into Tokens</h1>
+    <p class="standfirst">A hand-rolled tokenizer turns a monophonic melody into a flat sequence of integers a Transformer can predict — and turns the integers back into notes. Here is exactly what each one stands for.</p>
+  </header>
+
+  <p>The whole scheme is one line of grammar. A fragment opens with a start marker and a length, then alternates <em>what is sounding</em> with <em>how long it sounds</em>, until it ends.</p>
+
+  <div class="wide grammar" id="grammar"></div>
+
+  <p class="lede">Everything below is generated from the real vocabulary and the real <code>encode()</code> output — 113 tokens in total, at the default <code>TokenizerConfig</code>.</p>
+
+  <h2>1 · Time is a grid, not a clock</h2>
+  <p>Before anything is tokenized, a melody is quantized onto a <strong>16th-note grid</strong>: <code>steps_per_beat = 4</code>, <code>beats_per_bar = 4</code>, so one bar is 16 steps. Positions and durations are integer step counts, never floats. Here is a two-bar fragment on that grid — six notes and two silences.</p>
+
+  <div class="wide panel">
+    <div class="panel-head">
+      <h3>The fragment · 2 bars · 32 steps</h3>
+      <div class="panel-note">grid = 16th notes · pitch = MIDI note number</div>
+    </div>
+    <div class="scroller">
+      <div class="roll" id="roll"></div>
+    </div>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--pitch)"></i> sounding note</span>
+      <span><i class="swatch" style="background:var(--rest-soft);border:1px dashed var(--rest)"></i> rest</span>
+      <span><i class="swatch" style="background:var(--focus)"></i> encoder cursor</span>
+    </div>
+  </div>
+
+  <h2>2 · Encoding is a cursor walking left to right</h2>
+  <p><code>encode()</code> holds a cursor at step 0 and sweeps the notes in time order. Every time it meets a note it emits a <span class="tok tok-pitch">PITCH_p</span> and a <span class="tok tok-dur">DUR_n</span>; every gap it has to cross first becomes a <span class="tok tok-rest">REST</span> with its own duration. The cursor never jumps — which is why the token stream needs no position numbers at all. <strong>Position is implied by everything that came before.</strong></p>
+
+  <div class="wide panel">
+    <div class="panel-head">
+      <h3>Step the encoder</h3>
+      <div class="controls">
+        <button class="ui" id="btn-restart" type="button">Restart</button>
+        <button class="ui" id="btn-step" type="button">Step ▸</button>
+        <button class="ui" id="btn-play" type="button">Play</button>
+      </div>
+    </div>
+    <div class="scroller">
+      <div class="roll" id="roll2"></div>
+    </div>
+    <div class="stream" id="stream"></div>
+    <div class="panel-note" id="readout"></div>
+    <div class="panel-note">Hover a token pair or a block to link the two views.</div>
+  </div>
+
+  <p>Note the last pair: the melody stops sounding at step 28, but <code>LEN_2</code> promised 32 steps. The encoder pads the remainder with a trailing rest, so the token stream always accounts for every step of every bar it declared.</p>
+
+  <h2>3 · What each token actually represents</h2>
+  <p>Four kinds, and nothing else. A token is never a chord, a velocity, a channel, or an instrument — those live outside the model, in <code>app/</code>.</p>
+
+  <div class="wide cards" id="cards"></div>
+
+  <p style="margin-top:1.4rem">Laid end to end, that is the model's <em>entire</em> universe: 113 ids. Small vocabularies are the point — a fragment of any length still draws from the same short list, so a ~1–2M-parameter Transformer can learn the distribution from a laptop-sized corpus.</p>
+
+  <div class="wide panel">
+    <div class="panel-head">
+      <h3>The full vocabulary · 113 tokens</h3>
+      <div class="panel-note">each cell is one id · hover to inspect</div>
+    </div>
+    <div id="vocab"></div>
+    <div class="vocab-readout" id="vocab-readout">Hover any cell to see its id and meaning.</div>
+  </div>
+
+  <h2>4 · Three rules that fall out of the scheme</h2>
+
+  <div class="wide rules">
+
+    <div class="rule-card">
+      <div>
+        <h3>Long notes split, then re-merge</h3>
+        <p>The duration vocabulary stops at <code>DUR_32</code> (two bars). A four-bar drone is emitted as two identical back-to-back pairs; <code>decode()</code>'s <code>_merge_adjacent</code> rejoins same-pitch neighbours into one note. The vocabulary stays tiny no matter how long a note runs.</p>
+      </div>
+      <div class="demo" id="demo-split"></div>
+    </div>
+
+    <div class="rule-card">
+      <div>
+        <h3>Out-of-range values clamp, they don't crash</h3>
+        <p>Pitch is clamped to <code>36–96</code> (C2–C7), duration to <code>1–32</code> steps, length to <code>1–16</code> bars. A transposition that would push a note off the top of the range lands on the top of the range instead — the tokenizer always returns a legal sequence.</p>
+      </div>
+      <div class="demo" id="demo-clamp"></div>
+    </div>
+
+    <div class="rule-card">
+      <div>
+        <h3>Decoding tolerates a broken tail</h3>
+        <p>Generated sequences get cut off mid-token by the length limit, so the parser is defensive: it stops at the first <code>EOS</code>, drops a dangling event with no duration, and resyncs past a pair that doesn't type-check rather than throwing.</p>
+      </div>
+      <div class="demo" id="demo-tail"></div>
+    </div>
+
+  </div>
+
+  <h2>5 · What the scheme buys, and what it costs</h2>
+  <ul class="tight">
+    <li><strong>Length is a control token, not post-processing.</strong> <code>LEN_&lt;bars&gt;</code> sits at position 1, so "give me four bars" is a condition the model was trained on — not a truncation applied afterwards. At generation time every <code>LEN_*</code> id is masked out of the sampling distribution, so an under-trained model can't emit a stray one mid-body and silently override the request.</li>
+    <li><strong>Pitch is absolute, not intervallic.</strong> <code>PITCH_60</code> always means middle C. That is simpler to read and debug, but it buys no transposition invariance — the data pipeline compensates by augmenting the corpus with transposed copies instead.</li>
+    <li><strong>Monophonic by construction.</strong> One event is sounding at a time, so there is no note-off token and no overlap to resolve. Polyphony would need a different grammar, not a bigger vocabulary.</li>
+  </ul>
+
+  <div class="rule-line"></div>
+
+  <footer>
+    tokenizer &nbsp;<a href="#">melody_model/tokenizer.py</a><br>
+    grid + vocab shape &nbsp;melody_model/config.py &nbsp;·&nbsp; TokenizerConfig<br>
+    note representation &nbsp;melody_model/notes.py &nbsp;·&nbsp; NoteEvent(pitch, start_step, dur_step)<br>
+    reasoning &nbsp;docs/melody_model_design.md
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- vocabulary, mirrored from MelodyTokenizer._build_vocab -------------
+  var CFG = { pitchMin: 36, pitchMax: 96, maxEventSteps: 32, maxBars: 16, stepsPerBar: 16 };
+
+  var VOCAB = [];
+  ["PAD", "BOS", "EOS", "REST"].forEach(function (t) { VOCAB.push(t); });
+  for (var b = 1; b <= CFG.maxBars; b++) VOCAB.push("LEN_" + b);
+  for (var p = CFG.pitchMin; p <= CFG.pitchMax; p++) VOCAB.push("PITCH_" + p);
+  for (var d = 1; d <= CFG.maxEventSteps; d++) VOCAB.push("DUR_" + d);
+
+  var ID = {};
+  VOCAB.forEach(function (t, i) { ID[t] = i; });
+
+  var NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  function noteName(pitch) { return NAMES[pitch % 12] + (Math.floor(pitch / 12) - 1); }
+
+  function tokClass(t) {
+    if (t === "REST") return "rest";
+    if (t.indexOf("PITCH_") === 0) return "pitch";
+    if (t.indexOf("DUR_") === 0) return "dur";
+    return "ctrl";
+  }
+
+  function chip(token, extra) {
+    var el = document.createElement("span");
+    el.className = "tok tok-" + tokClass(token) + (extra ? " " + extra : "");
+    el.textContent = token;
+    el.title = "id " + ID[token] + " · " + describe(token);
+    return el;
+  }
+
+  function describe(t) {
+    if (t === "PAD") return "padding — fills a batch to equal length, ignored by the loss";
+    if (t === "BOS") return "beginning of sequence";
+    if (t === "EOS") return "end of sequence";
+    if (t === "REST") return "silence — the next DUR says for how long";
+    if (t.indexOf("LEN_") === 0) return "fragment is " + t.slice(4) + " bar" + (t.slice(4) === "1" ? "" : "s") + " long";
+    if (t.indexOf("PITCH_") === 0) {
+      var p = +t.slice(6);
+      return "MIDI note " + p + " — " + noteName(p);
+    }
+    var n = +t.slice(4);
+    return n + " grid step" + (n === 1 ? "" : "s") + " = " + (n / 4) + " beat" + (n / 4 === 1 ? "" : "s");
+  }
+
+  // ---- the worked example -------------------------------------------------
+  // encode([...], num_bars=2) -> [1,5,44,84,48,84,3,82,51,82,56,88,55,84,51,84,3,84,2]
+  var SEGMENTS = [
+    { kind: "note", pitch: 60, start: 0,  dur: 4 },
+    { kind: "note", pitch: 64, start: 4,  dur: 4 },
+    { kind: "rest",              start: 8,  dur: 2 },
+    { kind: "note", pitch: 67, start: 10, dur: 2 },
+    { kind: "note", pitch: 72, start: 12, dur: 8 },
+    { kind: "note", pitch: 71, start: 20, dur: 4 },
+    { kind: "note", pitch: 67, start: 24, dur: 4 },
+    { kind: "rest",              start: 28, dur: 4 }
+  ];
+  var TOTAL_STEPS = 32;
+  var PITCH_TOP = 72, PITCH_BOTTOM = 60;
+
+  SEGMENTS.forEach(function (s) {
+    s.event = s.kind === "note" ? "PITCH_" + s.pitch : "REST";
+    s.durTok = "DUR_" + s.dur;
+  });
+
+  // ---- grammar strip ------------------------------------------------------
+  (function buildGrammar() {
+    var host = document.getElementById("grammar");
+    var parts = [
+      chip("BOS"), sep("·"), chip("LEN_2"), sep("·"),
+      chip("PITCH_60"), chip("DUR_4"), sep("·"),
+      chip("REST"), chip("DUR_2"), sep("·"),
+      chip("PITCH_72"), chip("DUR_8"), sep("…"), chip("EOS")
+    ];
+    parts.forEach(function (n) { host.appendChild(n); });
+    function sep(s) { var e = document.createElement("span"); e.className = "sep"; e.textContent = s; return e; }
+  })();
+
+  // ---- piano roll ---------------------------------------------------------
+  function buildRoll(host, opts) {
+    host.innerHTML = "";
+
+    var bars = document.createElement("div");
+    bars.className = "barline";
+    bars.appendChild(document.createElement("div"));
+    ["Bar 1", "Bar 2"].forEach(function (label) {
+      var d = document.createElement("div");
+      d.textContent = label;
+      bars.appendChild(d);
+    });
+    host.appendChild(bars);
+
+    var ruler = document.createElement("div");
+    ruler.className = "roll-row ruler";
+    var rg = document.createElement("div");
+    rg.className = "gutter";
+    rg.textContent = "step";
+    ruler.appendChild(rg);
+    for (var s = 0; s < TOTAL_STEPS; s++) {
+      var c = document.createElement("div");
+      c.className = "cell";
+      if (s % 4 === 0) { var sp = document.createElement("span"); sp.textContent = s; c.appendChild(sp); }
+      ruler.appendChild(c);
+    }
+    host.appendChild(ruler);
+
+    var body = document.createElement("div");
+    body.className = "roll-body";
+
+    var rows = [];
+    for (var p = PITCH_TOP; p >= PITCH_BOTTOM; p--) rows.push(p);
+
+    rows.forEach(function (pitch, idx) {
+      var row = document.createElement("div");
+      row.className = "roll-row roll-lane" + (idx % 2 ? " alt" : "");
+      var g = document.createElement("div");
+      g.className = "gutter" + (pitch % 12 === 0 ? " strong" : "");
+      g.textContent = noteName(pitch) + " " + pitch;
+      row.appendChild(g);
+      for (var s2 = 0; s2 < TOTAL_STEPS; s2++) {
+        var cell = document.createElement("div");
+        cell.className = "cell" + (s2 === 0 ? " first" : "") + ((s2 + 1) % 16 === 0 ? " bar" : (s2 + 1) % 4 === 0 ? " beat" : "");
+        row.appendChild(cell);
+      }
+      body.appendChild(row);
+    });
+
+    // rest lane
+    var restRow = document.createElement("div");
+    restRow.className = "roll-row roll-lane";
+    restRow.style.marginTop = "6px";
+    var rgut = document.createElement("div");
+    rgut.className = "gutter";
+    rgut.textContent = "rest";
+    restRow.appendChild(rgut);
+    for (var s3 = 0; s3 < TOTAL_STEPS; s3++) {
+      var rc = document.createElement("div");
+      rc.className = "cell" + (s3 === 0 ? " first" : "") + ((s3 + 1) % 16 === 0 ? " bar" : (s3 + 1) % 4 === 0 ? " beat" : "");
+      rc.style.background = "transparent";
+      restRow.appendChild(rc);
+    }
+    body.appendChild(restRow);
+
+    var overlay = document.createElement("div");
+    overlay.className = "blocks";
+    body.appendChild(overlay);
+
+    var STEP = 22, LANE = 15;
+    var restTop = rows.length * LANE + 6;
+
+    var blocks = SEGMENTS.map(function (seg, i) {
+      var el = document.createElement("div");
+      el.className = "blk " + (seg.kind === "note" ? "note" : "rest");
+      el.style.left = (seg.start * STEP + 1) + "px";
+      el.style.width = (seg.dur * STEP - 3) + "px";
+      el.style.height = (LANE - 2) + "px";
+      el.style.top = (seg.kind === "note" ? (PITCH_TOP - seg.pitch) * LANE + 1 : restTop + 1) + "px";
+      el.textContent = seg.kind === "note" ? noteName(seg.pitch) : "rest";
+      el.title = seg.kind === "note"
+        ? noteName(seg.pitch) + " · starts at step " + seg.start + " · " + seg.dur + " steps"
+        : "silence · steps " + seg.start + "–" + (seg.start + seg.dur - 1);
+      el.dataset.seg = i;
+      overlay.appendChild(el);
+      return el;
+    });
+
+    var cursor = null;
+    if (opts && opts.cursor) {
+      cursor = document.createElement("div");
+      cursor.className = "cursor";
+      cursor.style.left = "0px";
+      overlay.appendChild(cursor);
+    }
+
+    host.appendChild(body);
+    return { blocks: blocks, cursor: cursor, stepPx: STEP };
+  }
+
+  var rollStatic = buildRoll(document.getElementById("roll"), { cursor: false });
+  var rollLive = buildRoll(document.getElementById("roll2"), { cursor: true });
+
+  // ---- token stream + stepper --------------------------------------------
+  var streamHost = document.getElementById("stream");
+  var readout = document.getElementById("readout");
+  var pairs = [];
+
+  var headPair = document.createElement("div");
+  headPair.className = "pair";
+  headPair.appendChild(chip("BOS"));
+  headPair.appendChild(chip("LEN_2"));
+  streamHost.appendChild(headPair);
+
+  SEGMENTS.forEach(function (seg, i) {
+    var pair = document.createElement("div");
+    pair.className = "pair";
+    pair.dataset.seg = i;
+    pair.appendChild(chip(seg.event));
+    pair.appendChild(chip(seg.durTok));
+    streamHost.appendChild(pair);
+    pairs.push(pair);
+  });
+
+  var eosPair = document.createElement("div");
+  eosPair.className = "pair";
+  eosPair.appendChild(chip("EOS"));
+  streamHost.appendChild(eosPair);
+
+  var emitted = SEGMENTS.length;
+
+  function render() {
+    var cursorStep = emitted === 0 ? 0 : SEGMENTS[emitted - 1].start + SEGMENTS[emitted - 1].dur;
+    SEGMENTS.forEach(function (seg, i) {
+      var on = i < emitted ? "1" : "0";
+      pairs[i].dataset.emitted = on;
+      rollLive.blocks[i].dataset.emitted = on;
+    });
+    eosPair.dataset.emitted = emitted === SEGMENTS.length ? "1" : "0";
+    rollLive.cursor.style.left = (cursorStep * rollLive.stepPx) + "px";
+
+    var tokenCount = 2 + emitted * 2 + (emitted === SEGMENTS.length ? 1 : 0);
+    readout.textContent =
+      "cursor at step " + cursorStep + " / " + TOTAL_STEPS +
+      "   ·   events emitted " + emitted + " / " + SEGMENTS.length +
+      "   ·   tokens " + tokenCount + " / 19";
+    document.getElementById("btn-step").disabled = emitted === SEGMENTS.length;
+  }
+
+  function linkHover(i, on) {
+    if (i < 0) return;
+    pairs[i].classList.toggle("lit", on);
+    rollLive.blocks[i].classList.toggle("lit", on);
+  }
+
+  pairs.forEach(function (pair, i) {
+    pair.addEventListener("mouseenter", function () { linkHover(i, true); });
+    pair.addEventListener("mouseleave", function () { linkHover(i, false); });
+  });
+  rollLive.blocks.forEach(function (blk, i) {
+    blk.addEventListener("mouseenter", function () { linkHover(i, true); });
+    blk.addEventListener("mouseleave", function () { linkHover(i, false); });
+  });
+
+  var timer = null;
+  var playBtn = document.getElementById("btn-play");
+
+  function stopPlay() {
+    if (timer) { clearInterval(timer); timer = null; }
+    playBtn.textContent = "Play";
+  }
+
+  document.getElementById("btn-step").addEventListener("click", function () {
+    stopPlay();
+    if (emitted < SEGMENTS.length) { emitted++; render(); }
+  });
+  document.getElementById("btn-restart").addEventListener("click", function () {
+    stopPlay();
+    emitted = 0;
+    render();
+  });
+  playBtn.addEventListener("click", function () {
+    if (timer) { stopPlay(); return; }
+    if (emitted === SEGMENTS.length) emitted = 0;
+    render();
+    playBtn.textContent = "Pause";
+    timer = setInterval(function () {
+      if (emitted >= SEGMENTS.length) { stopPlay(); return; }
+      emitted++;
+      render();
+    }, 620);
+  });
+
+  render();
+
+  // ---- token class cards --------------------------------------------------
+  (function buildCards() {
+    var host = document.getElementById("cards");
+    var defs = [
+      {
+        title: "Control",
+        klass: "var(--ctrl)",
+        count: "19 ids · PAD, BOS, EOS, LEN_1…LEN_16",
+        body: "Structural markers. LEN is the only conditioning signal the model gets: it is the second token of every fragment, so length is learned rather than trimmed on afterwards.",
+        ex: ["BOS", "LEN_4", "EOS"]
+      },
+      {
+        title: "Pitch",
+        klass: "var(--pitch)",
+        count: "61 ids · PITCH_36 … PITCH_96",
+        body: "One id per MIDI note number across five octaves, C2 to C7 — bass riffs through leads. Absolute, so PITCH_60 is always middle C.",
+        ex: ["PITCH_36", "PITCH_60", "PITCH_96"]
+      },
+      {
+        title: "Rest",
+        klass: "var(--rest)",
+        count: "1 id · REST",
+        body: "Silence needs no pitch, so a single id covers it. Like a pitch, it is always followed by a duration — which is what makes the stream self-positioning.",
+        ex: ["REST"]
+      },
+      {
+        title: "Duration",
+        klass: "var(--dur)",
+        count: "32 ids · DUR_1 … DUR_32",
+        body: "How long the event just named lasts, in 16th-note steps. Shared by notes and rests, capped at two bars — longer events are split into repeats.",
+        ex: ["DUR_1", "DUR_4", "DUR_32"]
+      }
+    ];
+    defs.forEach(function (d) {
+      var card = document.createElement("div");
+      card.className = "card";
+      card.style.setProperty("--klass", d.klass);
+      var h = document.createElement("h3"); h.textContent = d.title;
+      var c = document.createElement("div"); c.className = "count"; c.textContent = d.count;
+      var p = document.createElement("p"); p.textContent = d.body;
+      var ex = document.createElement("div"); ex.className = "examples";
+      d.ex.forEach(function (t) { ex.appendChild(chip(t)); });
+      card.appendChild(h); card.appendChild(c); card.appendChild(p); card.appendChild(ex);
+      host.appendChild(card);
+    });
+  })();
+
+  // ---- vocabulary strip ---------------------------------------------------
+  (function buildVocab() {
+    var host = document.getElementById("vocab");
+    var out = document.getElementById("vocab-readout");
+    var groups = [
+      { label: "Specials · ids 0–3", from: 0, to: 3 },
+      { label: "Length · ids 4–19", from: 4, to: 19 },
+      { label: "Pitch · ids 20–80", from: 20, to: 80 },
+      { label: "Duration · ids 81–112", from: 81, to: 112 }
+    ];
+    var wrap = document.createElement("div");
+    wrap.style.display = "flex";
+    wrap.style.flexDirection = "column";
+    wrap.style.gap = ".85rem";
+
+    groups.forEach(function (g) {
+      var block = document.createElement("div");
+      block.className = "vgroup";
+      var lab = document.createElement("div");
+      lab.className = "vgroup-label";
+      lab.textContent = g.label;
+      var strip = document.createElement("div");
+      strip.className = "vocab";
+      for (var i = g.from; i <= g.to; i++) {
+        (function (id) {
+          var cell = document.createElement("div");
+          cell.className = "vcell " + tokClass(VOCAB[id]);
+          cell.tabIndex = 0;
+          cell.title = VOCAB[id];
+          var show = function () { out.textContent = "id " + id + "  ·  " + VOCAB[id] + "  —  " + describe(VOCAB[id]); };
+          cell.addEventListener("mouseenter", show);
+          cell.addEventListener("focus", show);
+          strip.appendChild(cell);
+        })(i);
+      }
+      block.appendChild(lab);
+      block.appendChild(strip);
+      wrap.appendChild(block);
+    });
+    host.appendChild(wrap);
+  })();
+
+  // ---- rule demos ---------------------------------------------------------
+  function row(tokens, label) {
+    var line = document.createElement("div");
+    line.style.display = "flex";
+    line.style.flexWrap = "wrap";
+    line.style.alignItems = "center";
+    line.style.gap = ".22rem";
+    if (label) {
+      var l = document.createElement("span");
+      l.className = "arrow";
+      l.textContent = label;
+      l.style.marginRight = ".35rem";
+      line.appendChild(l);
+    }
+    tokens.forEach(function (t) {
+      if (t.plain) {
+        var s = document.createElement("span");
+        s.className = "arrow";
+        s.textContent = t.plain;
+        s.style.padding = "0 .2rem";
+        line.appendChild(s);
+      } else {
+        line.appendChild(chip(t));
+      }
+    });
+    return line;
+  }
+
+  var split = document.getElementById("demo-split");
+  split.appendChild(row([{ plain: "one note, C4, 64 steps (4 bars)" }], "in"));
+  split.appendChild(row(["BOS", "LEN_4", "PITCH_60", "DUR_32", "PITCH_60", "DUR_32", "EOS"], "encode"));
+  split.appendChild(row([{ plain: "NoteEvent(pitch=60, start_step=0, dur_step=64)" }], "decode"));
+
+  var clamp = document.getElementById("demo-clamp");
+  clamp.appendChild(row([{ plain: "pitch 104 · 40 steps · asked for 20 bars" }], "in"));
+  clamp.appendChild(row(["BOS", "LEN_16", "PITCH_96", "DUR_32", "PITCH_96", "DUR_8", { plain: "… trailing rests … " }, "EOS"], "encode"));
+
+  var tail = document.getElementById("demo-tail");
+  tail.appendChild(row(["PITCH_67", "DUR_4", "PITCH_71"], "truncated"));
+  tail.appendChild(row([{ plain: "dangling PITCH_71 dropped — one note kept, no exception" }], "decode"));
+
+})();
+</script>
