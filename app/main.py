@@ -6,8 +6,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import generator, player
-from .models import GenerateRequest, PlayRequest, Sequence
+from . import generator, melodies, player
+from .models import (
+    GenerateRequest,
+    LoadMelodyRequest,
+    PlayRequest,
+    Sequence,
+)
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -25,6 +30,24 @@ def generate(req: GenerateRequest) -> Sequence:
         seq = generator.generate_sequence(req)
     except Exception as exc:  # surface generation/parse failures to the UI
         raise HTTPException(status_code=502, detail=f"Generation failed: {exc}")
+    player.player.set_sequence(seq)
+    return seq
+
+
+@app.get("/melodies")
+def get_melodies() -> dict:
+    """List the .mid files melody_model.sample has written."""
+    return {"root": str(melodies.melody_root()), "melodies": melodies.list_melodies()}
+
+
+@app.post("/melodies/load", response_model=Sequence)
+def load_melody(req: LoadMelodyRequest) -> Sequence:
+    """Parse a .mid off disk into the same Sequence slot /generate writes to.
+    One sequence at a time by design: this replaces whatever was armed."""
+    try:
+        seq = melodies.load_melody(req.path)
+    except Exception as exc:  # bad path, unreadable/empty file, over-long loop
+        raise HTTPException(status_code=400, detail=str(exc))
     player.player.set_sequence(seq)
     return seq
 

@@ -1,10 +1,10 @@
-"""Turn a text query into a MIDI Sequence via the Claude API."""
+"""Turn a text query into a MIDI Sequence via the OpenAI API."""
 
-import anthropic
+from openai import OpenAI
 
 from .models import GenerateRequest, Sequence
 
-MODEL = "claude-haiku-4-5"
+MODEL = "gpt-4o-mini"
 
 SYSTEM = """You are a MIDI sequence generator for live electronic music.
 
@@ -18,7 +18,16 @@ Output a note-event list as structured JSON. Rules:
 - Match velocity dynamics to the style (accents louder, ghost notes quieter).
 - Pick a musically sensible loop_bars (1 or 2 for most loops)."""
 
-_client = anthropic.Anthropic()
+_client = None
+
+
+def _client_or_die() -> OpenAI:
+    """Built on first use, not at import: a missing key must not stop the app
+    from starting, since /ports, /melodies and playback need no API at all."""
+    global _client
+    if _client is None:
+        _client = OpenAI()
+    return _client
 
 
 def generate_sequence(req: GenerateRequest) -> Sequence:
@@ -27,16 +36,18 @@ def generate_sequence(req: GenerateRequest) -> Sequence:
         f"Tempo: {req.bpm} BPM. Key: {req.key}. "
         f"Set the sequence bpm to {req.bpm}."
     )
-    response = _client.messages.parse(
+    completion = _client_or_die().beta.chat.completions.parse(
         model=MODEL,
         max_tokens=4000,
-        system=SYSTEM,
-        messages=[{"role": "user", "content": user}],
-        output_format=Sequence,
+        messages=[
+            {"role": "system", "content": SYSTEM},
+            {"role": "user", "content": user},
+        ],
+        response_format=Sequence,
     )
-    seq = response.parsed_output
+    seq = completion.choices[0].message.parsed
     if seq is None:
-        raise ValueError("Claude did not return a parseable sequence")
+        raise ValueError("OpenAI did not return a parseable sequence")
     # Force the bpm the user asked for, regardless of what the model wrote.
     seq.bpm = req.bpm
     return seq
