@@ -54,6 +54,9 @@ small enough that a custom scheme is both simpler and easy to reason about.
 [BOS, LEN_<bars>, EVENT_1, DUR_1, EVENT_2, DUR_2, ..., EOS]
 ```
 
+Interactive walkthrough of the scheme (grid → cursor → tokens → full vocab):
+`docs/tokenizer_visualisation.html` — open it in a browser.
+
 - One control token up front, `LEN_<bars>` — the fragment length. This is
   how "set the sequence length" becomes a training signal rather than
   post-hoc truncation.
@@ -103,22 +106,56 @@ varied `.mid` output):
 - the three CLIs: `melody_model.data.prepare_dataset`, `melody_model.train`,
   `melody_model.sample`
 
-**Not done / explicitly deferred:**
-- **No real dataset yet.** Nothing has been downloaded — `prepare_dataset`
-  has only been run against synthetic test fixtures. Sourcing real
-  multi-genre MIDI (classical/jazz/pop/rock via Lakh + POP909 + Nottingham
-  + a jazz solo corpus; techno/house is the weak spot — no good public
-  monophonic bass/arp corpus exists, may need hand-curated or
-  LLM-bootstrapped supplementing) is the next real step.
-- **No real training run.** The checkpoints produced so far are a 30K-param
-  model trained for 3 epochs on ~175 synthetic fragments, purely to prove
-  the pipeline doesn't crash — not evidence of melody quality.
-  Hyperparameters (`ModelConfig`/`TrainConfig` defaults) are untuned.
-- **Hardware target undecided** (per earlier discussion — building for a
-  laptop first). Quantization/export/embedded runtime is unaddressed.
+**Wave 1 (done).** `data/raw/` holds the first real corpus — POP909 (909
+canonical files) plus Nottingham (1034 monophonic folk melodies) —
+tokenized by `prepare_dataset` into `data/fragments.jsonl`: **964,525
+fragments, vocab 113**. `checkpoints/wave1/best.pt` is an 844,672-param
+model trained on an 80k random subset. Its melodies are plausible, but
+**its validation number is not usable** (see below), and it predates
+checkpoint provenance, so it records nothing about how it was made.
+
+**Wave 2 (the training-quality pass).**
+- **The val split now holds out whole source files** (`melody_model/split.py`),
+  stratified by corpus. It used to shuffle records and slice 10% off the
+  top — but `prepare_dataset` emits up to twelve transposed copies of each
+  phrase plus several overlapping fragments per file, so near-identical
+  material landed on both sides and val loss measured recall rather than
+  generalization. Wave 1's `best.pt` was selected on that compromised
+  signal; its val number should not be compared against anything.
+- **Checkpoints carry provenance**: val loss, epoch, step, `TrainConfig`,
+  param count, dataset path and meta, split policy, git commit, timestamp.
+  Plus a per-epoch `history.jsonl` in the run directory.
+- **Recipe**: warmup + cosine LR decay, token-weighted val loss (per-batch
+  averaging drifted with however the batches fell), early stopping on
+  patience, and **length-bucketed batching** — fragments run 20-259 tokens
+  around a median of 37, and batching similar lengths together measured
+  **~15x faster** on MPS while cutting padding from 3.65x to 1.09x. Most of
+  that is attention being quadratic in the padded length.
+- **`melody_model/eval.py`** scores generated output on things val loss
+  cannot see: `LEN_` adherence, best-fit in-key ratio, note density, rest
+  fraction, degeneracy (empty / single-pitch / sparse), and a **copy rate**
+  against the training split. Held-out real music is measured the same way
+  as the reference column — for copy rate especially, it is the floor that
+  says what a non-memorizing model should look like.
+
+**Still open / deferred:**
+- **Corpus is two tonal Western sources.** Wave 3 candidates: Lakh sample,
+  MAESTRO classical, Weimar Jazz DB. Techno/house remains the weak spot —
+  no good public monophonic bass/arp corpus exists, so it may need
+  hand-curated or LLM-bootstrapped supplementing. Note that ~52k unique
+  phrases is thin for a 10M+ param model, which is exactly what the copy
+  rate metric is there to catch.
 - **Only length is a control token today.** Register, note-density, and
   genre/style conditioning were discussed as v2 features — same
-  mechanism (more control tokens), not yet implemented.
+  mechanism (more control tokens), not yet implemented. The evaluated
+  alternatives, in the recommended order: feature scoring, soft
+  position-aware logit biasing (best fit for continuous knobs, works on an
+  existing checkpoint), `--prime` phrase completion, then learned
+  conditioning tokens.
+- **`generate()` has no KV cache** — it re-runs a full forward over the whole
+  window per token. Deployment is a Raspberry Pi 5 (8 GB, PyTorch), so this
+  is a latency nicety rather than a blocker, and export/quantization/
+  embedded-runtime work is off the table entirely.
 - The skyline algorithm is the simple classic version (highest note wins
   on overlap) — good baseline per the literature, but doesn't handle
   every edge case (e.g. a genuine countermelody crossing above the main

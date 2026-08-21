@@ -11,3 +11,4 @@ __pycache__/
 /generated/
 .pytest_cache/
 
+.DS_Store

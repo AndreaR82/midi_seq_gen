@@ -32,6 +32,17 @@ python -m melody_model.sample --checkpoint checkpoints/wave1/best.pt \
     --bars 4 --count 5 --out-dir generated/preview
 ```
 
+```sh
+# train (validation holds out whole source files — see melody_model/split.py)
+python -m melody_model.train --dataset data/fragments.jsonl --out-dir checkpoints/wave2 \
+    --d-model 384 --n-layer 6 --n-head 6 --d-ff 1536 --dropout 0.2
+
+# score a checkpoint on things val loss cannot see (LEN_ adherence, in-key,
+# degeneracy, copy rate vs the training split), against held-out real music
+python -m melody_model.eval --checkpoint checkpoints/wave2/best.pt \
+    --dataset data/fragments.jsonl
+```
+
 Tests are pytest: `python -m pytest tests/ -q` (needs `requirements-train.txt`
 for the `melody_model` tests). No linter or build step is configured. The
 frontend has no toolchain — `static/app.js` is plain ES modules-free JS, so

@@ -63,10 +63,21 @@ class ModelConfig:
 @dataclass
 class TrainConfig:
     batch_size: int = 64
-    lr: float = 3e-4
+    lr: float = 3e-4  # peak LR, reached at the end of warmup
     weight_decay: float = 0.01
     epochs: int = 20
-    val_fraction: float = 0.1
+    val_fraction: float = 0.1  # share of *source files* held out, not of records
     grad_clip: float = 1.0
     seed: int = 0
     log_every: int = 50
+    warmup_steps: int = 500
+    lr_min_ratio: float = 0.1  # cosine floor, as a fraction of `lr`
+    patience: int = 3  # epochs without val improvement before stopping early
+    bucket_batches: bool = True  # batch similar lengths together to cut padding
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "TrainConfig":
+        return cls(**d)
