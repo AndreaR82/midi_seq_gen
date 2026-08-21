@@ -19,6 +19,10 @@
     #summary { margin-top: 1rem; padding: 0.75rem; background: #f4f4f4; border-radius: 6px; }
     pre { white-space: pre-wrap; word-break: break-word; font-size: 0.8rem; }
     .err { color: #b00020; }
+    fieldset { margin-top: 1.2rem; border: 1px solid #ddd; border-radius: 6px; padding: 0.5rem 0.75rem 0.75rem; }
+    legend { font-weight: 600; font-size: 0.85rem; padding: 0 0.3rem; }
+    .hint { margin-top: 0.4rem; font-size: 0.8rem; color: #666; word-break: break-all; }
+    #armed { margin-top: 0.75rem; }
   </style>
 </head>
 <body>
@@ -48,11 +52,24 @@
     <div style="flex:0"><button id="refresh">↻</button></div>
   </div>
 
+  <fieldset id="melodies">
+    <legend>Model melodies</legend>
+    <div class="row">
+      <div><select id="melody"></select></div>
+      <div style="flex:0"><button id="refreshMelodies" title="Rescan">↻</button></div>
+      <div style="flex:0"><button id="loadMelody">Load</button></div>
+    </div>
+    <div id="melodyRoot" class="hint"></div>
+  </fieldset>
+
   <div class="buttons">
     <button id="generate">Generate</button>
     <button id="play">Play</button>
+    <button id="preview">▶ Preview (browser)</button>
     <button id="stop">Stop</button>
   </div>
+
+  <div id="armed" class="hint"></div>
 
   <div id="status"></div>
   <div id="summary" hidden></div>

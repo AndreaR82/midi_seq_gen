@@ -25,3 +25,7 @@ class GenerateRequest(BaseModel):
 class PlayRequest(BaseModel):
     channel: int = Field(ge=1, le=16, description="MIDI channel 1-16 (UI-facing)")
     port_name: str
+
+
+class LoadMelodyRequest(BaseModel):
+    path: str = Field(description="path relative to the melody root, from /melodies")
