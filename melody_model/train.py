@@ -108,7 +108,12 @@ def train(dataset_path: Path, out_dir: Path, model_cfg: ModelConfig, train_cfg: 
     train_loader = DataLoader(FragmentDataset(train_records), batch_size=train_cfg.batch_size, shuffle=True, collate_fn=collate)
     val_loader = DataLoader(FragmentDataset(val_records), batch_size=train_cfg.batch_size, shuffle=False, collate_fn=collate)
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif torch.backends.mps.is_available():
+        device = "mps"  # Apple Silicon GPU — no-op fallback to cpu elsewhere
+    else:
+        device = "cpu"
     model = MelodyTransformer(model_cfg, pad_id=tokenizer.pad_id).to(device)
     print(
         f"model params: {model.num_params():,} | vocab size: {tokenizer.vocab_size} | "
