@@ -93,3 +93,30 @@ def test_transposition_augmentation_is_not_deduped_away(tmp_path):
     augmented_records, _ = build_dataset(tmp_path, cfg, bar_options=(2,), transpose_range=(-1, 1))
 
     assert len(augmented_records) == 3 * len(base_records)
+
+
+def test_one_bar_fragments_are_produced_and_tagged(tmp_path):
+    """Short loops are a first-class target (the app loops one sequence), so
+    the pipeline has to emit LEN_1 fragments, not just multi-bar phrases."""
+    _write_test_midi(tmp_path / "test.mid")
+    cfg = TokenizerConfig()
+
+    records, tokenizer = build_dataset(tmp_path, cfg, bar_options=(1,), transpose_range=(0, 0))
+
+    assert records, "no one-bar fragments survived the filters"
+    len_1 = tokenizer.token_to_id["LEN_1"]
+    for r in records:
+        assert r["bars"] == 1
+        assert r["tokens"][1] == len_1
+        notes, bars = tokenizer.decode(r["tokens"])
+        assert bars == 1
+        # everything inside the single bar, tail included
+        assert max(n.start_step + n.dur_step for n in notes) <= cfg.steps_per_bar
+
+
+def test_default_bar_options_cover_one_to_eight():
+    from melody_model.data.segment import segment_into_fragments
+
+    notes = [NoteEvent(60 + (i % 5), i * 4, 4) for i in range(32)]  # 8 bars of 16ths-ish
+    lengths = {bars for bars, _ in segment_into_fragments(notes, steps_per_bar=16)}
+    assert lengths == set(range(1, 9))

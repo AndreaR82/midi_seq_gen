@@ -9,10 +9,12 @@ from ..notes import NoteEvent
 
 def segment_into_fragments(
     notes: list[NoteEvent],
-    bar_options: tuple[int, ...] = (2, 4, 8),
+    bar_options: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8),
     steps_per_bar: int = 16,
 ) -> list[tuple[int, list[NoteEvent]]]:
     """Non-overlapping, bar-aligned windows at each length in bar_options.
+    Every length from 1 to 8 bars is windowed by default, so the model sees
+    (and can be asked for) a one-bar riff as readily as an eight-bar phrase.
     Notes are re-based to start at 0 within each window; a note straddling
     a window boundary is cut short in the earlier window and dropped from
     the next (its onset is what matters musically here, not a tied-over

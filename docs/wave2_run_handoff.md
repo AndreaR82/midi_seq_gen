@@ -17,7 +17,8 @@ The M1 has 8 GB of unified memory and a ~9.07 GB MPS allocation ceiling.
    i.e. **>25 s/step against 1.6-2.1 s/step benchmarked on the same GPU.** The
    machine was at 9.1 GB of 10.2 GB swap with 56M pageins — 964k records as
    Python dicts plus the model plus MPS buffers does not fit in 8 GB. One epoch
-   would have taken ~54 hours.
+   would have taken ~54 hours. (The dataset has since grown to 2.6M records,
+   so this is now even further out of reach on the Mac.)
 
 The GPU was never the bottleneck; memory capacity was. This is the specific
 thing the Spark fixes.
@@ -27,10 +28,11 @@ thing the Spark fixes.
 `/data/`, `/checkpoints/` and `/generated/` are gitignored, so **the dataset
 and the Wave 1 checkpoint do not travel with the repo**:
 
-- `data/fragments.jsonl` (227 MB) + `data/fragments.jsonl.meta.json` — either
+- `data/fragments.jsonl` (612 MB) + `data/fragments.jsonl.meta.json` — either
   copy them across, or rebuild from scratch following
   [`melody_model_data_prep.md`](melody_model_data_prep.md) §9 (two shallow
-  clones plus one `prepare_dataset` run, ~57 s).
+  clones plus one `prepare_dataset` run, ~3 min). Rebuilding is reproducible:
+  same corpus, same seed, same 2,602,037 records.
 - `checkpoints/wave1/best.pt` (3.4 MB) — only needed to re-measure the Wave 1
   baseline yourself. The numbers are already recorded below.
 
@@ -81,11 +83,31 @@ measuring the LR, not the model.
 Config decided earlier: same corpus (POP909 + Nottingham) so this run isolates
 the recipe fix, ~10.8M params, 4 epochs.
 
+**One thing did change since that decision: fragment lengths are now 1-8 bars,
+not 2/4/8.** Same music, 2.7x more windows onto it — 2.6M records instead of
+964k, and one-bar loops (19% of the set) are now trainable and requestable,
+which they were not before. Consequences for this run:
+
+- **An epoch is ~2.7x longer.** Steps/epoch scale with records, and the extra
+  records skew short, so they batch densely under `--max-tokens`. Budget the
+  time before launching, or cut `--epochs` — 4 epochs over 2.6M records is far
+  more optimizer steps than 4 epochs over 964k was.
+- **Peak memory is unchanged.** Batching is by padded-token budget, and the new
+  fragments are all *shorter* than the 8-bar worst case that set the ceiling.
+- **Loss is not comparable to a 2/4/8 run.** Short fragments are easier, so
+  average per-token loss drops for reasons that have nothing to do with model
+  quality. Compare the eval table below instead.
+
 ## Then evaluate
 
 ```sh
 python -m melody_model.eval --checkpoint checkpoints/wave2/best.pt --dataset data/fragments.jsonl
 ```
+
+`--bars` now defaults to `1,2,3,4,5,6,7,8`, so the report covers every trained
+length (800 generations instead of 300). The Wave 1 row below was measured over
+2/4/8 only — and Wave 1 never saw a one-bar fragment, so pass `--bars 2,4,8`
+if you want a like-for-like comparison against it.
 
 Wave 1's measured profile is the bar. It is a **0.85M-param** model, so beating
 it on loss is not the interesting part — these are:
@@ -102,8 +124,8 @@ it on loss is not the interesting part — these are:
 - **Length overrun is the clearest target.** Wave 1 runs past its requested bar
   count on over a third of generations; real music never does.
 - **Copy rate is the risk.** 4.5% against a 1.9% floor is mild memorization at
-  0.85M params. Wave 2 is 13x larger on the same ~52k unique phrases. If this
-  climbs sharply, the model is too big for the corpus — drop `--d-model` /
+  0.85M params. Wave 2 is 13x larger on the same music — ~219k unique windows,
+  but still only ~1,900 source files. If this climbs sharply, the model is too big for the corpus — drop `--d-model` /
   `--n-layer`, or expand the corpus (Wave 3), rather than accepting it.
 - Caveat on the Wave 1 row: it was trained under the old random-record split,
   so it has likely seen some of what the by-file split now holds out. Its

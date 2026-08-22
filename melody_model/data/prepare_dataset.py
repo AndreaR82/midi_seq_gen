@@ -35,7 +35,7 @@ def find_midi_files(input_dir: Path) -> list[Path]:
 def build_dataset(
     input_dir: Path,
     cfg: TokenizerConfig,
-    bar_options: tuple[int, ...] = (2, 4, 8),
+    bar_options: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8),
     transpose_range: tuple[int, int] = (-5, 6),
     seed: int = 0,
 ) -> tuple[list[dict], MelodyTokenizer]:
@@ -87,7 +87,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--input-dir", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--bars", default="2,4,8", help="comma-separated fragment lengths in bars")
+    parser.add_argument("--bars", default="1,2,3,4,5,6,7,8", help="comma-separated fragment lengths in bars")
     parser.add_argument("--transpose-min", type=int, default=-5)
     parser.add_argument("--transpose-max", type=int, default=6)
     parser.add_argument("--seed", type=int, default=0)

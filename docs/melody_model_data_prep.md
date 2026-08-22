@@ -13,8 +13,9 @@ companion: what each stage does, what it emits, and how to reproduce it.
 ## 1. The shape of the problem
 
 The model trains on **short monophonic melodic fragments** — one note at a time,
-2–8 bars long. Raw MIDI is none of those things: it's polyphonic, multi-track,
-arbitrary-length, and mixed with drums and chords. Data prep's whole job is to
+1–8 bars long (every length in that range, one-bar riffs included). Raw MIDI is
+none of those things: it's polyphonic, multi-track, arbitrary-length, and mixed
+with drums and chords. Data prep's whole job is to
 mine playable monophonic lines out of that mess and slice them into uniform,
 tokenized training examples.
 
@@ -31,7 +32,7 @@ raw .mid/.midi files
       ▼  extract.py        group by MIDI channel → score monophony → skyline
 monophonic NoteEvent lines (one or more per file)
       │
-      ▼  segment.py        bar-aligned windows (2/4/8) → filter → dedup → transpose
+      ▼  segment.py        bar-aligned windows (1–8) → filter → dedup → transpose
 clean, augmented fragments
       │
       ▼  tokenizer.py      [BOS, LEN_n, (event,dur)…, EOS]  → list[int]
@@ -108,7 +109,8 @@ Turns each extracted line into many short, clean, deduplicated, key-augmented
 fragments.
 
 **Windowing** (`segment_into_fragments`). Non-overlapping, bar-aligned windows at
-each length in `bar_options` (default **2, 4, 8** bars). Notes are re-based to
+each length in `bar_options` (default **1–8** bars, i.e. every length from a
+single bar to eight). Notes are re-based to
 start at 0 within each window; a note straddling a window boundary is cut short in
 the earlier window and dropped from the next (onset is what matters musically, not
 a tied-over tail).
@@ -117,6 +119,12 @@ a tied-over tail).
 - at least `min_notes` = **4** notes,
 - at least `min_distinct_pitches` = **2** distinct pitches (kills one-note drones),
 - rest ratio ≤ `max_rest_ratio` = **0.6** (kills fragments that are mostly silence).
+
+The note-count floor is absolute, so it bites hardest on the shortest window —
+but not hard enough to matter: measured over a 120-file sample, **66 %** of
+one-bar windows pass (4 notes in a bar is ordinary melodic density), and after
+dedup one-bar fragments are the *largest* length bucket in the corpus. No
+length-relative loosening was needed.
 
 **Deduplication** (`contour_signature`). A **transposition-invariant** fingerprint
 — each note as `(pitch − first_pitch, start_step, dur_step)` — collapses the same
@@ -192,7 +200,7 @@ python -m melody_model.data.prepare_dataset \
 |---|---|---|
 | `--input-dir` | (required) | root scanned recursively for `.mid`/`.midi` |
 | `--output` | (required) | `.jsonl` fragment file to write |
-| `--bars` | `2,4,8` | fragment lengths |
+| `--bars` | `1,2,3,4,5,6,7,8` | fragment lengths |
 | `--transpose-min` / `--transpose-max` | `-5` / `6` | augmentation range (semitones) |
 | `--seed` | `0` | shuffle seed for the output ordering |
 
@@ -210,23 +218,35 @@ counted, and skipped rather than aborting the run.
 
 ---
 
-## 8. Wave 1 results (actual run)
+## 8. Corpus results (actual run)
 
-`--input-dir data/raw` over the 1,943 Wave 1 files, defaults, ~57 s:
+`--input-dir data/raw` over the 1,943 Wave 1 files, defaults, ~3 min:
 
-- **964,525 fragments**, vocab **113**.
-- **Per source:** POP909 738,793 · Nottingham 225,732 (≈ **3.3 : 1**, pop-heavy —
+- **2,602,037 fragments**, vocab **113**.
+- **Per source:** POP909 1,974,545 · Nottingham 627,492 (≈ **3.1 : 1**, pop-heavy —
   a genre-balance consideration for later waves).
-- **Coverage:** 908 / 909 POP909 files and 1,026 / 1,034 Nottingham files yielded
+- **Coverage:** 908 / 909 POP909 files and 1,027 / 1,034 Nottingham files yielded
   fragments — extraction rejected almost nothing.
-- **Length mix:** 2-bar 482,899 · 4-bar 306,657 · 8-bar 174,969 (shorter windows
-  tile more times per line, so they dominate).
+- **Length mix** (shorter windows tile more times per line, so they dominate):
+
+  | bars | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+  |---|---|---|---|---|---|---|---|---|
+  | fragments | 504,741 | 480,837 | 422,111 | 302,819 | 286,161 | 226,630 | 210,381 | 168,357 |
+  | share | 19.4% | 18.5% | 16.2% | 11.6% | 11.0% | 8.7% | 8.1% | 6.5% |
+
+  One-bar fragments are the biggest bucket but not a majority; the distribution
+  tapers smoothly, so no length is starved.
 
 **Interpreting the multiplier:** dedup runs *before* the 12× transpose, so
-~964k fragments correspond to only **≈ 80k distinct underlying phrases** (each in
+~2.6M fragments correspond to only **≈ 219k distinct underlying phrases** (each in
 up to 12 keys). Real musical diversity is bounded by the phrase count, not the
 fragment count — worth remembering when reasoning about overfitting and about how
 much genuinely new signal Wave 2 would add.
+
+> **History:** the earlier `--bars 2,4,8` build of the same corpus produced
+> 964,525 fragments from ≈ 80k phrases. Widening to every length from 1 to 8 bars
+> is a **2.7×** increase in both — same music, ~2.7× more windows onto it, and
+> 612 MB instead of 227 MB on disk.
 
 ---
 

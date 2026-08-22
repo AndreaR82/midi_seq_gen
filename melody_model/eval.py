@@ -159,7 +159,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", required=True, type=Path)
     parser.add_argument("--dataset", required=True, type=Path)
     parser.add_argument("--count", type=int, default=100, help="samples per bar length")
-    parser.add_argument("--bars", default="2,4,8", help="comma-separated bar lengths to test")
+    parser.add_argument("--bars", default="1,2,3,4,5,6,7,8", help="comma-separated bar lengths to test")
     parser.add_argument("--temperature", type=float, default=0.9)
     parser.add_argument("--top-p", type=float, default=0.95)
     parser.add_argument("--seed", type=int, default=0)

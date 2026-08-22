@@ -26,7 +26,7 @@ out over MIDI through `app/player.py` exactly like a Claude-generated one.
    as `app/player.py`.
 
 2. **Segment** (`segment.py`) — slice each line into non-overlapping,
-   bar-aligned fragments at a few target lengths (2/4/8 bars by default),
+   bar-aligned fragments at every target length (1–8 bars by default),
    drop fragments that are too sparse or too static, dedupe by a
    transposition-invariant contour fingerprint (relative pitch + rhythm),
    and augment survivors by transposing into nearby keys (dropped, not
@@ -108,10 +108,12 @@ varied `.mid` output):
 
 **Wave 1 (done).** `data/raw/` holds the first real corpus — POP909 (909
 canonical files) plus Nottingham (1034 monophonic folk melodies) —
-tokenized by `prepare_dataset` into `data/fragments.jsonl`: **964,525
-fragments, vocab 113**. `checkpoints/wave1/best.pt` is an 844,672-param
-model trained on an 80k random subset. Its melodies are plausible, but
-**its validation number is not usable** (see below), and it predates
+tokenized by `prepare_dataset` into `data/fragments.jsonl`: **2,602,037
+fragments, vocab 113**, windowed at every length from 1 to 8 bars.
+`checkpoints/wave1/best.pt` is an 844,672-param model trained on an 80k
+random subset of the earlier 2/4/8-bar build of that corpus (964,525
+fragments), so it has never seen a `LEN_1` fragment. Its melodies are
+plausible, but **its validation number is not usable** (see below), and it predates
 checkpoint provenance, so it records nothing about how it was made.
 
 **Wave 2 (the training-quality pass).**
@@ -142,9 +144,11 @@ checkpoint provenance, so it records nothing about how it was made.
 - **Corpus is two tonal Western sources.** Wave 3 candidates: Lakh sample,
   MAESTRO classical, Weimar Jazz DB. Techno/house remains the weak spot —
   no good public monophonic bass/arp corpus exists, so it may need
-  hand-curated or LLM-bootstrapped supplementing. Note that ~52k unique
-  phrases is thin for a 10M+ param model, which is exactly what the copy
-  rate metric is there to catch.
+  hand-curated or LLM-bootstrapped supplementing. Note that ~219k unique
+  phrases (up from ~80k before the corpus was windowed at every length
+  from 1 to 8 bars) is still thin for a 10M+ param model, and widening the
+  windows adds *views* of the same music rather than new music — which is
+  exactly what the copy rate metric is there to catch.
 - **Only length is a control token today.** Register, note-density, and
   genre/style conditioning were discussed as v2 features — same
   mechanism (more control tokens), not yet implemented. The evaluated
